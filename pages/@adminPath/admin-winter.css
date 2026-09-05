@@ -1,0 +1,78 @@
+/* Scoped to the management surface, including its teleported dialogs. */
+.admin-winter,
+body:has(.admin-winter) > [data-reka-popper-content-wrapper],
+body:has(.admin-winter) [data-slot="dialog-content"],
+body:has(.admin-winter) [data-slot="sheet-content"],
+body:has(.admin-winter) [data-mobile="true"] {
+  --background: #182232;
+  --foreground: #fff;
+  --card: rgb(18 24 34 / .76);
+  --card-foreground: #fff;
+  --popover: #182232;
+  --popover-foreground: #fff;
+  --primary: #fff;
+  --primary-foreground: #182232;
+  --secondary: #344052;
+  --secondary-foreground: #fff;
+  --muted: rgb(18 24 34 / .65);
+  --muted-foreground: #dce3ed;
+  --accent: #3d4b60;
+  --accent-foreground: #fff;
+  --border: rgb(255 255 255 / .22);
+  --input: rgb(255 255 255 / .35);
+  --ring: #daeaff;
+  --sidebar: rgb(18 24 34 / .68);
+  --sidebar-foreground: #fff;
+  --sidebar-accent: rgb(255 255 255 / .18);
+  --sidebar-accent-foreground: #fff;
+  --sidebar-border: rgb(255 255 255 / .22);
+  --sidebar-ring: #daeaff;
+  color: var(--foreground);
+}
+.admin-winter {
+  min-height: 100dvh;
+  isolation: isolate;
+  background: #182232;
+  overflow-wrap: anywhere;
+}
+.admin-winter::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgb(0 0 0 / .12), rgb(9 15 25 / .5)), url('/images/winter-wonderland/winter-wonderland.png') center 38% / cover;
+}
+.admin-winter [data-slot="sidebar-wrapper"],
+.admin-winter [data-slot="sidebar-inset"],
+.admin-winter > main { background: transparent; }
+.admin-winter [data-slot="sidebar-inset"] { min-width: 0; box-shadow: none; padding: 8px; gap: 16px; }
+.admin-winter [data-sidebar="sidebar"],
+.admin-winter [data-slot="sidebar-inset"] > header,
+.admin-winter [data-slot="sidebar-inset"] > main,
+.admin-winter > main > [data-slot="card"] {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgb(18 24 34 / .68);
+  box-shadow: 0 12px 36px rgb(0 0 0 / .28), inset 0 1px 1px rgb(255 255 255 / .3);
+  backdrop-filter: blur(var(--admin-blur, 2.1px)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--admin-blur, 2.1px)) saturate(160%);
+}
+.admin-winter [data-slot="sidebar-inset"] > header { top: 8px; min-height: 64px; height: auto; padding-block: 12px; }
+.admin-winter [data-slot="sidebar-inset"] > main { min-width: 0; border-radius: 24px; animation: admin-content-enter 180ms ease-out; }
+.admin-winter [data-slot="card"] { border-radius: 20px; }
+.admin-winter [data-slot="table-container"] { border: 1px solid var(--border); border-radius: 14px; background: rgb(18 24 34 / .8); }
+.admin-winter thead { background: rgb(255 255 255 / .08); }
+.admin-winter :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select, [data-slot="select-trigger"]) { background: rgb(18 24 34 / .88); color: #fff; }
+.admin-winter :is(input, textarea)::placeholder { color: #b8c5d6; }
+.admin-winter :focus-visible { outline: 2px solid #daeaff; outline-offset: 2px; }
+.admin-login-tools { position: absolute; top: 20px; right: 20px; z-index: 10; }
+body:has(.admin-winter) [data-mobile="true"] { background: rgb(18 24 34 / .96); }
+@keyframes admin-content-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 768px) {
+  .admin-winter [data-slot="sidebar-inset"] { padding: 8px; }
+  .admin-winter [data-slot="sidebar-inset"] > main { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-winter *, .admin-winter *::before, .admin-winter *::after { animation: none !important; transition: none !important; }
+}

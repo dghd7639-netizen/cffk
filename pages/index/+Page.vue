@@ -2,17 +2,15 @@
   <main class="flex min-h-screen flex-col bg-muted/30">
     <header class="fixed inset-x-0 top-0 z-50 border-b bg-background/95 backdrop-blur">
       <div class="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-5">
-        <a href="/" class="flex min-w-0 items-center gap-2 font-semibold">
-          <img :src="brandLogoUrl" :alt="`${site.name} Logo`" class="size-9 shrink-0 rounded-md object-contain" />
-          <span class="truncate">{{ site.name }}</span>
-        </a>
+        <StorefrontBrand />
         <div class="flex shrink-0 items-center gap-2">
           <PublicNav />
         </div>
       </div>
     </header>
 
-    <section class="border-b bg-background pt-16">
+    <section class="storefront-hero">
+      <h1 class="px-5 pt-7 text-3xl font-semibold sm:text-4xl">{{ site.name }}</h1>
       <div class="mx-auto grid max-w-6xl gap-5 px-5 py-8 sm:grid-cols-[minmax(0,1fr)_22rem] sm:items-center">
         <div v-if="site.notice" class="flex min-w-0 items-center gap-3 text-sm leading-6 text-muted-foreground">
           <InfoIcon class="size-4 shrink-0 text-foreground" />
@@ -56,7 +54,7 @@
       </div>
 
       <div v-if="visibleProducts.length" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <article v-for="product in visibleProducts" :key="product.id" class="group overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-lg">
+        <article v-for="product in visibleProducts" :key="product.id" class="glass-card group overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-lg">
           <a :href="`/product/${product.slug}`" class="block">
             <div class="relative aspect-4/3 overflow-hidden bg-muted">
               <img :src="product.coverImage || defaultProductImage" :alt="product.name" class="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -74,7 +72,7 @@
         </article>
       </div>
 
-      <div v-else class="mt-6 border border-dashed bg-background px-6 py-16 text-center">
+      <div v-else class="glass-card mt-6 border border-dashed px-6 py-16 text-center">
         <PackageOpenIcon class="mx-auto size-8 text-muted-foreground" />
         <h3 class="mt-4 text-base font-semibold">{{ messages.storefront.noProducts }}</h3>
         <p class="mt-2 text-sm text-muted-foreground">{{ messages.storefront.noProductsDescription }}</p>
@@ -88,7 +86,7 @@
 <script lang="ts" setup>
 import { computed, ref } from "vue";
 import { InfoIcon, PackageOpenIcon, SearchIcon } from "@lucide/vue";
-import logoUrl from "@/assets/logo.svg?url";
+import StorefrontBrand from "@/components/storefront/StorefrontBrand.vue";
 import defaultProductImage from "@/assets/product_img.jpg?url";
 import { useData } from "vike-vue/useData";
 import { usePageContext } from "vike-vue/usePageContext";
@@ -117,7 +115,6 @@ const { messages, t } = useStorefrontPreferences();
 const selectedCategory = ref<number | null>(null);
 const query = ref("");
 const shouldMarqueeNotice = computed(() => (site.notice?.length ?? 0) > 30);
-const brandLogoUrl = computed(() => site.logo || logoUrl);
 const visibleProducts = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return data.products.filter((product) =>

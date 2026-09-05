@@ -1,5 +1,6 @@
 <template>
   <div class="flex items-center gap-1">
+    <Button variant="ghost" size="sm" :aria-label="`玻璃虚化 ${blurLevel}%，点击切换`" @click="cycleBlur">{{ blurLevel }}%</Button>
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
         <Button type="button" variant="ghost" size="icon" :aria-label="messages.preferences.language" :title="messages.preferences.language">
@@ -33,5 +34,5 @@ import zhCN from "@/lib/i18n/zh-CN";
 import zhTW from "@/lib/i18n/zh-TW";
 import { useStorefrontPreferences } from "@/lib/storefront-preferences";
 
-const { messages, setLocale, setTheme, theme } = useStorefrontPreferences();
+const { messages, setLocale, setTheme, theme, blurLevel, cycleBlur } = useStorefrontPreferences();
 </script>

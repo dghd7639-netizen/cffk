@@ -1,5 +1,5 @@
 <template>
-  <a href="/" class="flex min-w-0 items-center gap-2 font-semibold" aria-label="返回首页">
+  <a href="/" class="header-brand-panel flex min-w-0 items-center gap-2 font-semibold" aria-label="返回首页">
     <img :src="brandLogoUrl" :alt="`${siteName} Logo`" class="size-9 shrink-0 rounded-md object-contain" />
     <span class="truncate">{{ siteName }}</span>
   </a>

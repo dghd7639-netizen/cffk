@@ -18,6 +18,16 @@ const localeStorageKey = "storefront-locale";
 const themeStorageKey = "storefront-theme";
 const locale = ref<StorefrontLocale>("zh-CN");
 const theme = ref<StorefrontTheme>("light");
+export const blurLevels = [0, 5, 15, 30, 45, 60, 75, 90, 100] as const;
+export function normalizeBlurLevel(value: string | number | null): number {
+  if (value === null || String(value).trim() === "" || !Number.isFinite(Number(value))) return 5;
+  return blurLevels.reduce<number>((nearest, level) => Math.abs(level - Number(value)) < Math.abs(nearest - Number(value)) ? level : nearest, 0);
+}
+const blurLevel = ref(5);
+function cycleBlur() {
+  blurLevel.value = blurLevels[(blurLevels.findIndex(level => level === blurLevel.value) + 1) % blurLevels.length];
+  try { window.localStorage.setItem("storefront-blur", String(blurLevel.value)); } catch { /* Keep the preference for this visit when storage is unavailable. */ }
+}
 let initialized = false;
 
 function isLocale(value: string | null): value is StorefrontLocale {
@@ -47,6 +57,7 @@ function applyDocumentPreferences() {
 function initialize() {
   if (initialized || typeof window === "undefined") return;
   initialized = true;
+  try { blurLevel.value = normalizeBlurLevel(window.localStorage.getItem("storefront-blur")); } catch { blurLevel.value = 5; }
 
   const savedLocale = window.localStorage.getItem(localeStorageKey);
   const savedTheme = window.localStorage.getItem(themeStorageKey);
@@ -67,6 +78,8 @@ function replaceParams(value: string, params: Record<string, string | number>) {
 export function useStorefrontPreferences(): {
   locale: typeof locale;
   theme: typeof theme;
+  blurLevel: typeof blurLevel;
+  cycleBlur: typeof cycleBlur;
   messages: ComputedRef<Messages>;
   setLocale: (nextLocale: StorefrontLocale) => void;
   setTheme: (nextTheme: StorefrontTheme) => void;
@@ -94,5 +107,5 @@ export function useStorefrontPreferences(): {
     return replaceParams(value, params);
   }
 
-  return { locale, theme, messages, setLocale, setTheme, t };
+  return { locale, theme, blurLevel, cycleBlur, messages, setLocale, setTheme, t };
 }
