@@ -57,6 +57,57 @@ function result(provider: PaymentProviderKind, values: Partial<PaymentNotifyResu
   return { provider, ...values };
 }
 
+type HashpayConfigValues = ReturnType<typeof parseHashpayConfig>;
+
+async function hashpayRequest(config: HashpayConfigValues, method: "GET" | "POST", path: string, body = "") {
+  const privateKey = await importPem(config.privateKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, "sign");
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = base64(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(`${method}\n${path}\n${timestamp}\n${body}`)));
+  const headers: Record<string, string> = { "X-Merchant-Id": config.merchantId, "X-Timestamp": timestamp, "X-Signature": signature };
+  if (method === "POST") headers["content-type"] = "application/json";
+  return fetch(`${config.baseUrl.replace(/\/+$/, "")}${path}`, { method, headers, ...(method === "POST" ? { body } : {}) });
+}
+
+type HashpayOrder = { id: string; merchantNo?: string; amount: number; currency?: string; status: string };
+
+/**
+ * Reads an order from HashPay with a merchant-signed request. HashPay callbacks
+ * are only encrypted to the merchant public key, which proves confidentiality
+ * but not origin, so payment state must come from this authenticated query.
+ */
+async function queryHashpayOrder(config: HashpayConfigValues, orderId: string): Promise<HashpayOrder | null> {
+  const response = await hashpayRequest(config, "GET", `/api/order/${encodeURIComponent(orderId)}`);
+  if (!response.ok) return null;
+  let body: unknown;
+  try { body = JSON.parse((await response.text()).replace(/^﻿/, "")); } catch { return null; }
+  if (!body || typeof body !== "object") return null;
+  const wrapper = body as Record<string, unknown>;
+  const candidate = (wrapper.order && typeof wrapper.order === "object" ? wrapper.order : wrapper.data && typeof wrapper.data === "object" ? wrapper.data : wrapper) as Record<string, unknown>;
+  const id = typeof candidate.id === "string" || typeof candidate.id === "number" ? String(candidate.id) : "";
+  const amountValue = Number(candidate.amount);
+  const status = typeof candidate.status === "string" ? candidate.status.toLowerCase() : "";
+  if (!id || !Number.isFinite(amountValue) || amountValue <= 0 || !status) return null;
+  return {
+    id,
+    merchantNo: typeof candidate.merchantNo === "string" ? candidate.merchantNo.trim() : undefined,
+    amount: amountValue,
+    currency: typeof candidate.currency === "string" ? candidate.currency.toUpperCase() : undefined,
+    status,
+  };
+}
+
+function hashpayStatus(status: string): PaymentNotifyResult["status"] {
+  return status === "paid" ? "PAID" : status === "expired" || status === "failed" || status === "cancelled" ? "FAILED" : "PENDING";
+}
+
+async function hashpayQueryResult(config: HashpayConfigValues, orderNo: string, orderId: string, message: string) {
+  const order = await queryHashpayOrder(config, orderId);
+  if (!order || order.id !== orderId || (order.merchantNo !== undefined && order.merchantNo !== orderNo)) {
+    return result("HASHPAY", { verified: false, orderNo, paymentOrderNo: orderId, status: "PENDING", message: "HASHPAY_QUERY_FAILED" });
+  }
+  return result("HASHPAY", { verified: true, orderNo, paymentOrderNo: order.id, amount: Math.round(order.amount * 100), currency: order.currency, status: hashpayStatus(order.status), message });
+}
+
 export function createProviderAdapter(provider: PaymentProviderKind, config: Record<string, unknown>): PaymentAdapter {
   const json = JSON.stringify(config);
   if (provider === "ALIPAY") return {
@@ -94,8 +145,30 @@ export function createProviderAdapter(provider: PaymentProviderKind, config: Rec
   }
   const parsed = parseHashpayConfig(json);
   return {
-    create: async (input) => { const privateKey = await importPem(parsed.privateKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, "sign"); const path = "/api/merchant/new"; const timestamp = Math.floor(Date.now() / 1000).toString(); const body = JSON.stringify({ merchantNo: input.orderNo, amount: input.amount / 100, currency: parsed.currency, description: input.subject, return_url: input.returnUrl }); const signature = base64(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(`POST\n${path}\n${timestamp}\n${body}`))); const response = await fetch(`${parsed.baseUrl.replace(/\/+$/, "")}${path}`, { method: "POST", headers: { "content-type": "application/json", "X-Merchant-Id": parsed.merchantId, "X-Timestamp": timestamp, "X-Signature": signature }, body }); const text = await response.text(); let data: { checkoutUrl?: string; order?: { id?: string } }; try { data = JSON.parse(text); } catch { throw new Error("HASHPAY_INVALID_RESPONSE"); } if (!response.ok || !data.checkoutUrl || !data.order?.id) throw new Error("HASHPAY_CREATE_FAILED"); return { mode: "redirect", url: data.checkoutUrl, paymentOrderNo: data.order.id }; },
-    verify: async ({ rawBody = "" }) => { try { const decrypted = await decryptHashpay(rawBody, parsed.privateKey); if (Math.abs(Date.now() / 1000 - decrypted.timestamp) > 300) return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_TIMESTAMP_EXPIRED" }); const payload = decrypted.payload; const merchantNo = typeof payload.merchantNo === "string" ? payload.merchantNo.trim() : ""; const paymentAmount = Number(payload.amount); if (!merchantNo || !Number.isFinite(paymentAmount) || paymentAmount <= 0) throw new Error("HASHPAY_CALLBACK_INVALID"); return result(provider, { verified: true, orderNo: merchantNo, paymentOrderNo: payload.orderId ? String(payload.orderId) : undefined, amount: Math.round(paymentAmount * 100), currency: typeof payload.currency === "string" ? payload.currency.toUpperCase() : undefined, status: payload.status === "paid" ? "PAID" : payload.status === "expired" ? "FAILED" : "PENDING", message: "HASHPAY_CALLBACK" }); } catch { return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_CALLBACK_INVALID" }); } },
+    create: async (input) => { const body = JSON.stringify({ merchantNo: input.orderNo, amount: input.amount / 100, currency: parsed.currency, description: input.subject, return_url: input.returnUrl }); const response = await hashpayRequest(parsed, "POST", "/api/merchant/new", body); const text = await response.text(); let data: { checkoutUrl?: string; order?: { id?: string } }; try { data = JSON.parse(text); } catch { throw new Error("HASHPAY_INVALID_RESPONSE"); } if (!response.ok || !data.checkoutUrl || !data.order?.id) throw new Error("HASHPAY_CREATE_FAILED"); return { mode: "redirect", url: data.checkoutUrl, paymentOrderNo: data.order.id }; },
+    verify: async ({ rawBody = "" }) => {
+      let merchantNo: string;
+      let orderId: string;
+      try {
+        const decrypted = await decryptHashpay(rawBody, parsed.privateKey);
+        if (Math.abs(Date.now() / 1000 - decrypted.timestamp) > 300) return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_TIMESTAMP_EXPIRED" });
+        const payload = decrypted.payload;
+        merchantNo = typeof payload.merchantNo === "string" ? payload.merchantNo.trim() : "";
+        orderId = typeof payload.orderId === "string" || typeof payload.orderId === "number" ? String(payload.orderId).trim() : "";
+        const paymentAmount = Number(payload.amount);
+        if (!merchantNo || !orderId || !Number.isFinite(paymentAmount) || paymentAmount <= 0) throw new Error("HASHPAY_CALLBACK_INVALID");
+      } catch {
+        return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_CALLBACK_INVALID" });
+      }
+      // The decrypted callback is only a hint. Anyone holding the merchant
+      // public key can produce a valid envelope, so the payment state, amount
+      // and currency are taken from an authenticated query to HashPay.
+      return hashpayQueryResult(parsed, merchantNo, orderId, "HASHPAY_CALLBACK");
+    },
+    query: async ({ orderNo, paymentOrderNo }) => {
+      if (!paymentOrderNo) return result(provider, { verified: false, orderNo, status: "PENDING", message: "HASHPAY_ORDER_ID_MISSING" });
+      return hashpayQueryResult(parsed, orderNo, paymentOrderNo, "HASHPAY_QUERY");
+    },
   };
 }
 

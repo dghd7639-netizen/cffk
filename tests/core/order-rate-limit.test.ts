@@ -55,6 +55,8 @@ describe("public order request rate limiting", () => {
     assert.equal(orderRequestLimit("RECOVERY", false), 3);
     assert.equal(orderRequestLimit("QUERY", true), 60);
     assert.equal(orderRequestLimit("RESUME", true), 10);
+    assert.equal(orderRequestLimit("CREATE", false), 5);
+    assert.equal(orderRequestLimit("CREATE", true), 20);
   });
 
   test("hashes action and requester identity without storing raw identifiers", async () => {

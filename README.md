@@ -82,12 +82,13 @@ CFFK 延续 EdgeKey 的 Cloudflare 全栈商城定位，并在现有能力上进
 | --- | --- | --- |
 | `ADMIN_PATH` | 普通变量 | 后台访问路径，请填写难以猜测的随机字符串，**不含** `/`，例如 `admin-3q9527ko8`。 |
 | `BETTER_AUTH_SECRET` | Secret | 登录会话签名密钥。请使用强随机值，可通过 `openssl rand -base64 32` 生成。 |
+| `SETUP_TOKEN` | Secret | 首次初始化 root 账号时必须填写的口令，至少 16 位，可通过 `openssl rand -hex 16` 生成。防止他人在你之前抢先访问 `/setup` 占用管理员账号。 |
 | `TURNSTILE_SITE_KEY` | 可选普通变量 | Cloudflare Turnstile 站点密钥；启用验证码时必须同时配置 Secret。 |
 | `TURNSTILE_SECRET_KEY` | 可选 Secret | Cloudflare Turnstile 密钥；启用验证码时必须同时配置站点密钥。 |
 
 部署完成后：
 
-1. 打开 `https://你的Workers域名/setup`，创建首个 root 管理员账号。初始化完成后该页面将不可再次创建管理员。
+1. 打开 `https://你的Workers域名/setup`，填写部署时设置的 `SETUP_TOKEN`，创建首个 root 管理员账号。初始化完成后该页面将不可再次创建管理员。
 2. 访问 `https://你的Workers域名/${ADMIN_PATH}`，使用刚创建的账号登录后台。
 3. 进入 `/${ADMIN_PATH}/dash`，先在 **系统配置 → 站点配置** 中完善站点名称、公开地址、公告、客服方式和页脚信息。
 4. 配置支付渠道、创建商品并导入卡密或设置发货方式，即可开始使用。
@@ -176,7 +177,7 @@ bun run deploy            # 迁移、导入默认数据并部署
 ## ❓ 常见问题
 
 - **后台无法访问**：确认地址是 `/${ADMIN_PATH}`，并检查部署时填写的 `ADMIN_PATH` 是否正确。
-- **首次部署没有管理员**：访问 `/setup` 创建首个管理员；仅未初始化时可用。
+- **首次部署没有管理员**：访问 `/setup` 并填写 `SETUP_TOKEN` 创建首个管理员；仅未初始化时可用。提示未配置口令时，在 Cloudflare 控制台为 Worker 添加 `SETUP_TOKEN` Secret 后重试。
 - **支付回调失败**：在“系统配置 → 站点配置”中设置正确的公开站点地址，再检查对应支付渠道的回调地址和密钥。
 - **邮件通知没有发送**：先在“推送管理 → 电子邮件 → 通道配置”创建、测试并启用一个邮件 Provider，然后检查推送设置与模板。
 - **媒体上传失败**：在“系统配置 → 媒体存储”配置 S3 兼容端点、Bucket 和访问凭据，并使用“测试连接”验证 PUT、读取和删除权限。

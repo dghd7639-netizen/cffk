@@ -5,6 +5,8 @@ export const errorMessages: Record<string, string> = {
   ADMIN_ACCESS_REQUIRED: "管理员身份已失效，请重新登录。",
   DATABASE_UNAVAILABLE: "服务暂时不可用，请稍后重试。",
   ROOT_SETUP_NOT_FOUND: "初始化页面不存在。",
+  ROOT_SETUP_TOKEN_NOT_CONFIGURED: "尚未配置初始化口令，请先在 Cloudflare 中设置至少 16 位的 SETUP_TOKEN Secret。",
+  ROOT_SETUP_TOKEN_INVALID: "初始化口令不正确。",
 
   ROOT_SETUP_USERNAME_INVALID: "用户名格式无效。",
   ROOT_SETUP_NAME_INVALID: "昵称格式无效。",

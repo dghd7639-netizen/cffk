@@ -11,14 +11,36 @@ import { telefuncAction } from "@/server/telefunc-action";
 type SetupContext = {
   env?: Record<string, unknown> & {
     DB?: D1Database;
+    SETUP_TOKEN?: string;
   };
 };
 
 type SetupInput = {
+  setupToken: string;
   name: string;
   email: string;
   password: string;
 };
+
+function timingSafeEqual(left: string, right: string) {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  let difference = leftBytes.length ^ rightBytes.length;
+  for (let index = 0; index < leftBytes.length; index += 1) difference |= leftBytes[index]! ^ (rightBytes[index] ?? 0);
+  return difference === 0;
+}
+
+/**
+ * Until a root account exists, anyone who can reach /setup could otherwise
+ * claim the store. The deployer proves ownership with a secret that only they
+ * configured, so a stranger who finds a freshly deployed site first cannot.
+ */
+export function assertSetupToken(configured: unknown, provided: unknown) {
+  const expected = typeof configured === "string" ? configured.trim() : "";
+  if (expected.length < 16) appError("ROOT_SETUP_TOKEN_NOT_CONFIGURED");
+  const candidate = typeof provided === "string" ? provided.trim() : "";
+  if (!candidate || !timingSafeEqual(candidate, expected)) appError("ROOT_SETUP_TOKEN_INVALID");
+}
 
 
 function validateAccountInput(input: SetupInput) {
@@ -41,6 +63,7 @@ async function internalOnSetupRoot(input: SetupInput) {
 
   const runtime = { runtime: "workerd", env: context.env } as unknown as RuntimeAdapter;
   if (await hasRoot(runtime)) appError("ROOT_SETUP_NOT_FOUND");
+  assertSetupToken(context.env.SETUP_TOKEN, input.setupToken);
 
 
   const values = validateAccountInput(input);

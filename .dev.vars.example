@@ -6,6 +6,9 @@ ADMIN_PATH=
 # Better Auth 会话签名密钥；请用 openssl rand -base64 32 生成随机值。/ Better Auth session signing secret; generate one with openssl rand -base64 32.
 BETTER_AUTH_SECRET=
 
+# 首次访问 /setup 创建 root 账号时需要填写的口令，至少 16 位；可用 openssl rand -hex 16 生成。/ Token required by /setup to create the first root account (min 16 chars); generate one with openssl rand -hex 16.
+SETUP_TOKEN=
+
 # TURNSTILE_SECRET_KEY
 # 前端站点 Key
 # TURNSTILE_SITE_KEY=

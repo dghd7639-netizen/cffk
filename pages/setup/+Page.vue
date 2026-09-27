@@ -8,6 +8,14 @@
       <form v-if="!initialized" novalidate @submit.prevent="submit">
         <CardContent>
           <FieldGroup>
+            <VeeField v-slot="{ componentField, errors }" name="setupToken" :validate-on-input="true">
+              <Field :data-invalid="errors.length > 0">
+                <FieldLabel for="setup-token">初始化口令</FieldLabel>
+                <Input id="setup-token" v-bind="componentField" type="password" autocomplete="off" :aria-invalid="errors.length > 0" />
+                <FieldDescription>部署时配置的 SETUP_TOKEN Secret。</FieldDescription>
+                <FieldError v-if="errors.length" :errors="errors" />
+              </Field>
+            </VeeField>
             <VeeField v-slot="{ componentField, errors }" name="name" :validate-on-input="true">
               <Field :data-invalid="errors.length > 0">
                 <FieldLabel for="setup-name">昵称</FieldLabel>
@@ -53,7 +61,7 @@ import { ref } from "vue";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { runTelefunc } from "@/lib/telefunc-client";
 import { onSetupRoot } from "@/server/setup.telefunc";
@@ -61,7 +69,7 @@ import { onSetupRoot } from "@/server/setup.telefunc";
 const initialized = ref(false);
 
 const schema = z.object({
-
+  setupToken: z.string().trim().min(1, "请输入初始化口令。"),
   name: z.string().trim().min(1, "请输入昵称。").max(100, "昵称不能超过 100 个字符。"),
   email: z.string().trim().email("请输入有效邮箱。").max(320, "邮箱地址过长。"),
   password: z.string().min(8, "密码至少需要 8 位字符。").max(128, "密码不能超过 128 位字符。"),
@@ -73,7 +81,7 @@ const schema = z.object({
 
 const { handleSubmit, isSubmitting } = useForm({
   validationSchema: toTypedSchema(schema),
-  initialValues: { name: "root", email: "", password: "", confirmPassword: "" },
+  initialValues: { setupToken: "", name: "root", email: "", password: "", confirmPassword: "" },
 });
 
 const submit = handleSubmit(async ({ confirmPassword: _confirmPassword, ...input }) => {
