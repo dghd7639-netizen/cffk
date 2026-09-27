@@ -1,11 +1,11 @@
 import { appError } from "@/lib/app-error";
 
-export type OrderRequestAction = "QUERY" | "RESUME" | "RECOVERY";
+export type OrderRequestAction = "QUERY" | "RESUME" | "RECOVERY" | "CREATE";
 
 const WINDOW_MS = 60_000;
 const LIMITS = {
-  GUEST: { QUERY: 10, RESUME: 3, RECOVERY: 3 },
-  ACCOUNT: { QUERY: 60, RESUME: 10, RECOVERY: 3 },
+  GUEST: { QUERY: 10, RESUME: 3, RECOVERY: 3, CREATE: 5 },
+  ACCOUNT: { QUERY: 60, RESUME: 10, RECOVERY: 3, CREATE: 20 },
 } as const;
 
 function bytesToHex(bytes: Uint8Array) {

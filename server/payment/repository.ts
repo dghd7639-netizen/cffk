@@ -30,7 +30,12 @@ export function paymentRepository(database: D1Database) {
       // Alipay and Epay return their platform trade number in callbacks, while
       // creation records the merchant order number. Their signed merchant
       // order number, provider and amount are verified by the callback flow.
-      if (paymentOrderNo && provider !== "ALIPAY" && provider !== "EPAY") conditions.push(eq(paymentAttempt.paymentOrderNo, paymentOrderNo));
+      // Every other provider must name the provider order created for this
+      // attempt; without it a callback could match an unrelated pending attempt.
+      if (provider !== "ALIPAY" && provider !== "EPAY") {
+        if (!paymentOrderNo) return null;
+        conditions.push(eq(paymentAttempt.paymentOrderNo, paymentOrderNo));
+      }
       const [record] = await db.select().from(paymentAttempt).where(and(...conditions)).orderBy(desc(paymentAttempt.id)).limit(1);
       return record ?? null;
     },

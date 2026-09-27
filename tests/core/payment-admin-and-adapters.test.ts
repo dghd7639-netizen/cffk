@@ -322,6 +322,87 @@ test("HashPay callbacks reject invalid decrypted business fields", async () => {
   assert.equal(invalidTimestamp.verified, false);
 });
 
+const hashpayConfig = { schemaVersion: 1, baseUrl: "https://hashpay.example", merchantId: "merchant-1", privateKey: testPrivateKey, currency: "USD", notifyUrl: "https://shop.example/api/payments/hashpay/notify", returnUrl: "https://shop.example/result" };
+
+async function withHashpayQuery(respond: (request: Request) => Response, run: (requests: Request[]) => Promise<void>) {
+  const originalFetch = globalThis.fetch;
+  const requests: Request[] = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    return respond(request);
+  };
+  try {
+    await run(requests);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+test("HashPay callbacks take payment state from a signed order query, not the envelope", async () => {
+  const adapter = createProviderAdapter("HASHPAY", hashpayConfig);
+  const timestamp = Math.floor(Date.now() / 1000);
+  // A forged envelope claims payment, but HashPay reports the order as pending.
+  const forged = await encryptHashpayCallback({ timestamp, payload: { merchantNo: "ORD-HP-2", orderId: "HP-2", amount: 9.99, currency: "USD", status: "paid" } });
+  await withHashpayQuery(() => Response.json({ order: { id: "HP-2", merchantNo: "ORD-HP-2", amount: 9.99, currency: "USD", status: "pending" } }), async (requests) => {
+    const result = await adapter.verify({ payload: {}, rawBody: forged });
+    assert.equal(result.status, "PENDING");
+    assert.equal(requests.length, 1);
+    const request = requests[0]!;
+    assert.equal(request.method, "GET");
+    assert.equal(new URL(request.url).pathname, "/api/order/HP-2");
+    assert.equal(request.headers.get("X-Merchant-Id"), "merchant-1");
+    const signedTimestamp = request.headers.get("X-Timestamp")!;
+    const isValid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      await crypto.subtle.importKey("spki", Buffer.from(rawPemBody(testPublicKey), "base64"), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]),
+      Buffer.from(request.headers.get("X-Signature")!, "base64"),
+      new TextEncoder().encode(`GET\n/api/order/HP-2\n${signedTimestamp}\n`),
+    );
+    assert.equal(isValid, true);
+  });
+
+  await withHashpayQuery(() => Response.json({ order: { id: "HP-2", merchantNo: "ORD-HP-2", amount: 9.99, currency: "usd", status: "paid" } }), async () => {
+    const result = await adapter.verify({ payload: {}, rawBody: forged });
+    assert.deepEqual(result, { provider: "HASHPAY", verified: true, orderNo: "ORD-HP-2", paymentOrderNo: "HP-2", amount: 999, currency: "USD", status: "PAID", message: "HASHPAY_CALLBACK" });
+  });
+});
+
+test("HashPay callbacks fail closed when the order query cannot confirm the order", async () => {
+  const adapter = createProviderAdapter("HASHPAY", hashpayConfig);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const withoutOrderId = await adapter.verify({ payload: {}, rawBody: await encryptHashpayCallback({ timestamp, payload: { merchantNo: "ORD-HP-3", amount: 1, status: "paid" } }) });
+  assert.equal(withoutOrderId.verified, false);
+  assert.equal(withoutOrderId.message, "HASHPAY_CALLBACK_INVALID");
+
+  const envelope = await encryptHashpayCallback({ timestamp, payload: { merchantNo: "ORD-HP-3", orderId: "HP-3", amount: 1, status: "paid" } });
+  for (const response of [
+    () => new Response("unavailable", { status: 503 }),
+    () => new Response("not json", { status: 200 }),
+    () => Response.json({ order: { id: "HP-OTHER", amount: 1, status: "paid" } }),
+    () => Response.json({ order: { id: "HP-3", merchantNo: "ORD-OTHER", amount: 1, status: "paid" } }),
+  ]) {
+    await withHashpayQuery(response, async () => {
+      const result = await adapter.verify({ payload: {}, rawBody: envelope });
+      assert.equal(result.verified, false);
+      assert.equal(result.message, "HASHPAY_QUERY_FAILED");
+    });
+  }
+});
+
+test("HashPay active query requires the recorded provider order id", async () => {
+  const adapter = createProviderAdapter("HASHPAY", hashpayConfig);
+  const missing = await adapter.query!({ orderNo: "ORD-HP-4", amount: 100 });
+  assert.equal(missing.verified, false);
+  assert.equal(missing.message, "HASHPAY_ORDER_ID_MISSING");
+  await withHashpayQuery(() => Response.json({ id: "HP-4", amount: 1, currency: "USD", status: "paid" }), async () => {
+    const result = await adapter.query!({ orderNo: "ORD-HP-4", paymentOrderNo: "HP-4", amount: 100 });
+    assert.equal(result.verified, true);
+    assert.equal(result.status, "PAID");
+    assert.equal(result.amount, 100);
+  });
+});
+
 test("Epay and BEpusdt callbacks enforce signed provider status", async () => {
   const epay = createProviderAdapter("EPAY", epayConfig);
   const epayResult = await epay.verify({ payload: { pid: "1000", out_trade_no: "ORD-7", money: "1.00", trade_status: "TRADE_CLOSED", status: "success", sign: "invalid", sign_type: "MD5" } });
